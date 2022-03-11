@@ -1,5 +1,6 @@
 start:
-    PRINT_STR "Введите число"
+    PRINT_STR "Вычисление n-го числа Фибоначчи."
+    PRINT_STR "Введите число:"
     SCAN_INT cx
     MOV ax, 0
     MOV bx, 1
