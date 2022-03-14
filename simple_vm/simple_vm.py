@@ -9,6 +9,7 @@ class SimpleVM:
         self.EBX = 0
         self.ECX = 0
         self.EDX = 0
+        self.ESP = 0
 
         # флаги регистр флагов
         self.ZF = False  # равенство
@@ -23,7 +24,13 @@ class SimpleVM:
             0x06: self.sub,
             0x07: self.cmp,
             0x08: self.je,
-            0x09: self.jmp
+            0x09: self.jmp,
+            0x0A: self.jg,
+            0x0B: self.call,
+            0x0C: self.ret,
+            0x0D: self.push,
+            0x0E: self.pop,
+            0x0F: self.stack_mov,
         }
 
         # команды, работающие с метками
@@ -119,16 +126,77 @@ class SimpleVM:
         self.EIP = int.from_bytes(self.memory[self.EIP + 2:self.EIP + 4], 'big')
         self.EIP -= 4
 
-    def run_program(self, filename: str) -> None:
+    def jg(self) -> None:
+        """
+        Если выполнено неравенство "больше", перемещается по метке.
+        :return: None
+        """
+        if not (self.ZF or self.LF):
+            self.jmp()
+
+    def call(self) -> None:
+        """
+        Перемещается по метке, вызывая функцию.
+        :return: None
+        """
+        self.ESP -= 4
+        self.memory[self.ESP:self.ESP + 4] = self.EIP.to_bytes(4, 'big')
+        self.EIP = int.from_bytes(self.memory[self.EIP + 2:self.EIP + 4], 'big')
+        self.EIP -= 4
+
+    def ret(self) -> None:
+        """
+        Команда возврата из функции.
+        :return: None
+        """
+        self.EIP = int.from_bytes(self.memory[self.ESP:self.ESP + 4], 'big')
+        self.ESP += 4
+
+    def push(self) -> None:
+        """
+        Кладёт значение на стек.
+        :return: None
+        """
+        self.ESP -= 4
+        self.EAX = int.from_bytes(self.memory[self.EIP + 2:self.EIP + 4], 'big')
+        self.memory[self.ESP:self.ESP + 4] = self.memory[self.EAX:self.EAX + 4]
+
+    def pop(self) -> None:
+        """
+        Снимает значение со стека.
+        :return: None
+        """
+        self.EAX = int.from_bytes(self.memory[self.EIP + 2:self.EIP + 4], 'big')
+        self.memory[self.EAX:self.EAX + 4] = self.memory[self.ESP:self.ESP + 4]
+        self.ESP += 4
+
+    def stack_mov(self) -> None:
+        """
+        Помещает в переменную значение из стека. Место в стеке задаётся сдвигом
+        относительно регистра ESP.
+        :return: None
+        """
+        self.parse_ints()
+        self.ECX = self.memory[self.ESP + self.EDX:self.ESP + self.EDX + 4]
+        self.memory[self.EAX:self.EAX + 4] = self.ECX
+
+    def run_program(self, filename: str, size: int = None) -> None:
         """
         Выполняет программу по байт-коду
         :param filename: название файла с байт-кодом
+        :param size: память, выделяемая под программу
         :return: None
         """
         with  open(filename, 'rb') as byte_code:
             self.memory = bytearray(byte_code.read())
+        if size is None:
+            size = len(self.memory)
+        if len(self.memory) > size:
+            Exception('Выделяемой памяти не хватает')
+        self.memory.extend(b'\x00' * (size - len(self.memory)))
 
         self.EIP = int.from_bytes(self.memory[:self.instruction_size], 'big')
+        self.ESP = size
         while True:
             if self.memory[self.EIP] == 0xFF:
                 # завершить выполнение
@@ -136,6 +204,6 @@ class SimpleVM:
             elif self.memory[self.EIP] in self.commands_dict.keys():
                 self.commands_dict[self.memory[self.EIP]]()
             else:
-                print(f'Unexpected command {self.memory[self.EIP]:02x}')
+                print(f'Неожиданная команда {self.memory[self.EIP]:02x}')
                 break
             self.EIP += self.instruction_size

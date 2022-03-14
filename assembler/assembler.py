@@ -14,13 +14,20 @@ class Assembler:
             'cmp': 0x07,
             'je': 0x08,
             'jmp': 0x09,
+            'jg': 0x0A,
+            'call': 0x0B,
+            'ret': 0x0C,
+            'push': 0x0D,
+            'pop': 0x0E,
+            'stack_mov': 0x0F,
             'stop': 0xFF
         }
         # команды, работающие с переменными
         self.vars_commands = tuple(self.commands_dict.keys())[:7]
+        self.vars_commands += tuple(self.commands_dict.keys())[12:15]
 
         # команды, работающие с метками
-        self.labels_commands = tuple(self.commands_dict.keys())[7:9]
+        self.labels_commands = tuple(self.commands_dict.keys())[7:11]
 
         self.code_lines = []
         self.byte_code = bytearray()
@@ -112,13 +119,11 @@ class Assembler:
             instruction = bytearray(4)
             instruction[0] = self.commands_dict[parts[0]]
             if parts[0] in self.vars_commands:  # работаем с переменными
-                if len(parts) < 2:
-                    raise Exception(f'Некорректная инструкция: "{line}"')
                 if len(parts) > 2:
                     instruction[1] = self.variables[parts[1]]
                     instruction[2:] = self.variables[parts[2]].to_bytes(2,
                                                                         'big')
-                else:
+                elif len(parts) == 2:
                     instruction[3] = self.variables[parts[1]]
             elif parts[0] in self.labels_commands:  # работаем с метками
                 if len(parts) < 2:
